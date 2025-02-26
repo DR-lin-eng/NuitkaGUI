@@ -40,12 +40,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install nuitka
-        python -m pip install loguru pyside6 pyside6-fluent-widgets
         
-        # 安装requirements.txt中的依赖（如果存在）
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f requirements-dev.lock ]; then pip install -r requirements-dev.lock; fi
-        if [ -f requirements.lock ]; then pip install -r requirements.lock; fi
+        # 安装所有项目依赖
+        python -m pip install ansi2html==1.9.2 colorama==0.4.6 darkdetect==0.8.0 loguru==0.7.2 pyside6==6.7.3 pyside6-addons==6.7.3 pyside6-essentials==6.7.3 pyside6-fluent-widgets==1.6.5 pysidesix-frameless-window==0.4.3 shiboken6==6.7.3 typing-extensions==4.12.2 win32-setctime==1.1.0
+        
+        # 在Windows上安装pywin32
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          python -m pip install pywin32==306
+        fi
+        
+        # 安装项目本身（开发模式）
+        python -m pip install -e .
       shell: bash
     
     - name: Install Linux dependencies
@@ -57,17 +62,17 @@ jobs:
     - name: Build with Nuitka (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --include-package=loguru --include-package=darkdetect --include-package=ansi2html --include-package=colorama --include-package-data=pyside6_fluent_widgets --follow-imports --output-dir=dist NuitkaGUI.py
     
     - name: Build with Nuitka (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --include-package=loguru --include-package=darkdetect --include-package=ansi2html --include-package=colorama --include-package-data=pyside6_fluent_widgets --follow-imports --output-dir=dist NuitkaGUI.py
     
     - name: Build with Nuitka (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --include-package=loguru --include-package=darkdetect --include-package=ansi2html --include-package=colorama --include-package-data=pyside6_fluent_widgets --follow-imports --output-dir=dist NuitkaGUI.py
     
     - name: Prepare artifact name
       id: artifact-name
