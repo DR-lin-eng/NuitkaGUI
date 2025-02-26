@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9']
+        python-version: ['3.10']
         include:
           - os: windows-latest
             output-name: NuitkaGUI.exe
