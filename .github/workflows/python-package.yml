@@ -1,38 +1,96 @@
-name: Build Executables
+name: Build NuitkaGUI Application
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        
-    steps:
-    - uses: actions/checkout@v4
+        python-version: ['3.9']
+        include:
+          - os: windows-latest
+            output-name: NuitkaGUI.exe
+          - os: ubuntu-latest
+            output-name: NuitkaGUI
+          - os: macos-latest
+            output-name: NuitkaGUI
+
+    runs-on: ${{ matrix.os }}
     
-    - name: Set up Python
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取所有历史记录和标签
+    
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'  # 缓存pip依赖
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyinstaller
+        python -m pip install nuitka
+        python -m pip install loguru pyside6 pyside6-fluent-widgets
+        
+        # 安装requirements.txt中的依赖（如果存在）
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements-dev.lock ]; then pip install -r requirements-dev.lock; fi
+        if [ -f requirements.lock ]; then pip install -r requirements.lock; fi
       shell: bash
     
-    - name: Build with PyInstaller
-      run: pyinstaller --onefile NuitkaGUI.py
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx libxkbcommon-x11-0 libdbus-1-3 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libpulse0 libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+      
+    - name: Build with Nuitka (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
     
-    - name: Upload artifacts
+    - name: Build with Nuitka (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
+    
+    - name: Build with Nuitka (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python -m nuitka --standalone --onefile --assume-yes-for-downloads --enable-plugin=pyside6 --output-dir=dist NuitkaGUI.py
+    
+    - name: Prepare artifact name
+      id: artifact-name
+      shell: bash
+      run: |
+        echo "name=NuitkaGUI-${{ matrix.os }}" >> $GITHUB_OUTPUT
+    
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.os }}-build
-        path: dist/
+        name: ${{ steps.artifact-name.outputs.name }}
+        path: dist/${{ matrix.output-name }}
+        if-no-files-found: error
+        retention-days: 30
+    
+    # 创建GitHub Release（仅对标签触发执行）
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/${{ matrix.output-name }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
